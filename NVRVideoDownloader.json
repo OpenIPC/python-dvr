@@ -1,0 +1,11 @@
+{
+        "host_ip": "10.0.0.8",
+        "user": "admin",
+        "password": "mypassword",
+        "channel": 0,
+        "download_dir": "./download",
+        "start": "2023-11-19 6:22:34",
+        "end": "2023-11-19 6:23:09",
+        "just_list_files": false,
+        "log_level": "INFO"
+}

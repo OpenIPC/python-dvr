@@ -198,7 +198,7 @@ class DVRIPCam(object):
         return reply
 
     def send_custom(
-        self, msg, data={}, wait_response=True, download=False, size=None, version=0
+        self, msg, data={}, wait_response=True, download=False, version=0
     ):
         if self.socket is None:
             return {"Ret": 101}
@@ -245,9 +245,9 @@ class DVRIPCam(object):
 
             reply = None
             if download:
-                reply = self.get_file()
-            elif size:
-                reply = self.get_specific_size(size)
+                reply = self.get_file(len_data)
+            else:
+                reply = self.get_specific_size(len_data)
             self.busy.release()
             return reply
 
@@ -764,20 +764,10 @@ class DVRIPCam(object):
                 return data
             vprint(f"Upgraded {data['Ret']}%")
 
-    def get_file(self):
-        # recorded with 15 (0x0F) fps
-
+    def get_file(self, first_chunk_size):
         buf = bytearray()
-        data = self.receive_with_timeout(16)
-        (
-            static,
-            dyn1,
-            dyn2,
-            len_data,
-        ) = struct.unpack("IIII", data)
-        file_length = len_data
 
-        data = self.receive_with_timeout(8176)
+        data = self.receive_with_timeout(first_chunk_size)
         buf.extend(data)
 
         while True:
@@ -925,7 +915,7 @@ class DVRIPCam(object):
     def stop_monitor(self):
         self.monitoring = False
 
-    def list_local_files(self, startTime, endTime, filetype):
+    def list_local_files(self, startTime, endTime, filetype, channel = 0):
         # 1440 OPFileQuery
         result = []
         data = self.send(
@@ -934,7 +924,7 @@ class DVRIPCam(object):
                 "Name": "OPFileQuery",
                 "OPFileQuery": {
                     "BeginTime": startTime,
-                    "Channel": 0,
+                    "Channel": channel,
                     "DriverTypeMask": "0x0000FFFF",
                     "EndTime": endTime,
                     "Event": "*",
@@ -944,14 +934,14 @@ class DVRIPCam(object):
             },
         )
 
-        if data == None or data["Ret"] != 100:
+        if data == None:
             self.logger.debug("Could not get files.")
             raise ConnectionRefusedError("Could not get files")
 
-        # When no file can be found for the query OPFileQuery is None
-        if data["OPFileQuery"] == None:
+        # When no file can be found
+        if data["Ret"] != 100:
             self.logger.debug(
-                f"No files found for this range. Start: {startTime}, End: {endTime}"
+                f"No files found for channel {channel} for this time range. Start: {startTime}, End: {endTime}"
             )
             return []
 
@@ -972,7 +962,7 @@ class DVRIPCam(object):
                         "Name": "OPFileQuery",
                         "OPFileQuery": {
                             "BeginTime": newStartTime,
-                            "Channel": 0,
+                            "Channel": channel,
                             "DriverTypeMask": "0x0000FFFF",
                             "EndTime": endTime,
                             "Event": "*",
@@ -1122,3 +1112,9 @@ class DVRIPCam(object):
             },
         )
         return None
+
+    def get_channel_titles(self):
+        return self.get_command("ChannelTitle", 1048)
+
+    def get_channel_statuses(self):
+        return self.get_info("NetWork.ChnStatus")
