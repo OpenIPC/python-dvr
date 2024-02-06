@@ -4,7 +4,7 @@ import json
 from time import sleep
 import hashlib
 import threading
-from socket import socket, AF_INET, SOCK_STREAM, SOCK_DGRAM
+from socket import socket, AF_INET, SOCK_STREAM, SOCK_DGRAM, SOL_SOCKET
 from datetime import *
 from re import compile
 import time
@@ -100,6 +100,7 @@ class DVRIPCam(object):
     def __init__(self, ip, **kwargs):
         self.logger = logging.getLogger(__name__)
         self.ip = ip
+        self.iface = kwargs.get("iface", None)
         self.user = kwargs.get("user", "admin")
         hash_pass = kwargs.get("hash_pass")
         self.hash_pass = kwargs.get(
@@ -130,6 +131,9 @@ class DVRIPCam(object):
                 self.socket_send = self.tcp_socket_send
                 self.socket_recv = self.tcp_socket_recv
                 self.socket = socket(AF_INET, SOCK_STREAM)
+                if self.iface:
+                    self.socket.setsockopt(
+                        SOL_SOCKET, 25, str(self.iface + '\0').encode())
                 self.socket.connect((self.ip, self.port))
             elif self.proto == "udp":
                 self.socket_send = self.udp_socket_send
