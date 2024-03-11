@@ -711,7 +711,7 @@ class DVRIPCam(object):
 
     def upgrade(self, filename="", packetsize=0x8000, vprint=None):
         if not vprint:
-            vprint = lambda x: print(x)
+            vprint = lambda *args, **kwargs: print(*args, **kwargs)
 
         data = self.set_command(
             "OPSystemUpgrade", {"Action": "Start", "Type": "System"}, 0x5F0
@@ -719,7 +719,7 @@ class DVRIPCam(object):
         if data["Ret"] not in self.OK_CODES:
             return data
 
-        vprint("Ready to upgrade")
+        self.logger.debug(f"Sending file: {filename}")
         blocknum = 0
         sentbytes = 0
         fsize = os.stat(filename).st_size
@@ -738,38 +738,32 @@ class DVRIPCam(object):
 
                 reply, rcvd = self.recv_json(rcvd)
                 if reply and reply["Ret"] != 100:
-                    vprint("Upgrade failed")
+                    vprint("\nUpgrade failed")
                     return reply
 
                 progress = sentbytes / fsize * 100
-                vprint(f"Uploaded {progress:.2f}%")
-        vprint("End of file")
+                vprint(f"Uploading: {progress:.1f}%", end='\r')
+        vprint()
+        self.logger.debug("Upload complete")
 
         pkt = struct.pack("BB2xIIxBHI", 255, 0, self.session, blocknum, 1, 0x05F2, 0)
         self.socket_send(pkt)
-        vprint("Waiting for upgrade...")
-        while True:
-            reply, rcvd = self.recv_json(rcvd)
-            print(reply)
-            if not reply:
-                return
-            if reply["Name"] == "" and reply["Ret"] == 100:
-                break
-
+        self.logger.debug("Starting upgrade...")
         while True:
             data, rcvd = self.recv_json(rcvd)
-            print(reply)
+            self.logger.debug(reply)
             if data is None:
-                vprint("Done")
+                vprint("\nDone")
                 return
             if data["Ret"] in [512, 514, 513]:
-                vprint("Upgrade failed")
+                vprint("\nUpgrade failed")
                 return data
             if data["Ret"] == 515:
-                vprint("Upgrade successful")
+                vprint("\nUpgrade successful")
                 self.socket.close()
                 return data
-            vprint(f"Upgraded {data['Ret']}%")
+            vprint(f"Upgrading: {data['Ret']:>3}%", end='\r')
+        vprint()
 
     def get_file(self, first_chunk_size):
         buf = bytearray()
