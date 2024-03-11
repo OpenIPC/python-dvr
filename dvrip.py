@@ -198,8 +198,11 @@ class DVRIPCam(object):
 
         self.packet_count += 1
         self.logger.debug("<= %s", data)
-        reply = json.loads(data[:-2])
-        return reply
+        try:
+            reply = json.loads(data[:-2])
+            return reply
+        except:
+            return data
 
     def send_custom(
         self, msg, data={}, wait_response=True, download=False, version=0
