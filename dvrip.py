@@ -41,7 +41,7 @@ class DVRIPCam(object):
         "AddGroup": 1476,
         "ModifyGroup": 1478,
         "DelGroup": 1480,
-        "AddUser": 1482,
+        "User": 1482,
         "ModifyUser": 1484,
         "DelUser": 1486,
         "ModifyPassword": 1488,
@@ -393,17 +393,15 @@ class DVRIPCam(object):
             return False
         g = g[0]
         data = self.set_command(
-            "AddUser",
+            "User",
             {
-                "User": {
-                    "AuthorityList": auth or g["AuthorityList"],
-                    "Group": g["Name"],
-                    "Memo": comment,
-                    "Name": name,
-                    "Password": self.sofia_hash(password),
-                    "Reserved": False,
-                    "Sharable": sharable,
-                },
+                "AuthorityList": auth or g["AuthorityList"],
+                "Group": g["Name"],
+                "Memo": comment,
+                "Name": name,
+                "Password": self.sofia_hash(password),
+                "Reserved": False,
+                "Sharable": sharable,
             },
         )
         return data["Ret"] in self.OK_CODES
