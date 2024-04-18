@@ -453,7 +453,7 @@ class DVRIPCam(object):
             {
                 "EncryptType": "MD5",
                 "NewPassWord": self.sofia_hash(newpass),
-                "PassWord": oldpass or self.password,
+                "PassWord": oldpass or self.hash_pass,
                 "SessionID": "0x%08X" % self.session,
                 "UserName": user or self.user,
             },
