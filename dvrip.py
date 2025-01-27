@@ -319,6 +319,8 @@ class DVRIPCam(object):
         self.session = int(data["SessionID"], 16)
         self.alive_time = data["AliveInterval"]
         self.keep_alive()
+        if not hasattr(self, 'devtype'):
+            self.devtype = data["DeviceType "]
         return data["Ret"] in self.OK_CODES
 
     def getAuthorityList(self):
