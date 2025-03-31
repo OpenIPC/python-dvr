@@ -645,6 +645,11 @@ class DVRIPCam(object):
             code = self.QCODES[command]
 
         data = self.send(code, {"Name": command, "SessionID": "0x%08X" % self.session})
+
+        if isinstance(data, (bytes, bytearray)):
+            data = bytes(b for b in data[:-2] if b >= 32 or b in (9, 10, 13))
+            data = json.loads(data)
+
         if data["Ret"] in self.OK_CODES and command in data:
             return data[command]
         else:
