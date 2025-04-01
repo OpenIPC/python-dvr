@@ -315,6 +315,8 @@ class DVRIPCam(object):
             },
         )
         if data is None or data["Ret"] not in self.OK_CODES:
+            if data["Ret"] in self.CODES:
+                print(f'[{data["Ret"]}] {self.CODES[data["Ret"]]}')
             return False
         self.session = int(data["SessionID"], 16)
         self.alive_time = data["AliveInterval"]
