@@ -28,6 +28,8 @@ class DVRIPCam(object):
         106: "Username or password is incorrect",
         107: "User does not have necessary permissions",
         203: "Password is incorrect",
+        205: 'User does not exist',
+        207: 'Blacklisted',
         511: "Start of upgrade",
         512: "Upgrade was not started",
         513: "Upgrade data errors",
@@ -317,6 +319,7 @@ class DVRIPCam(object):
         if data is None or data["Ret"] not in self.OK_CODES:
             if data["Ret"] in self.CODES:
                 print(f'[{data["Ret"]}] {self.CODES[data["Ret"]]}')
+                self.session=data["Ret"]
             return False
         self.session = int(data["SessionID"], 16)
         self.alive_time = data["AliveInterval"]
@@ -650,7 +653,7 @@ class DVRIPCam(object):
 
         if isinstance(data, (bytes, bytearray)):
             data = bytes(b for b in data[:-2] if b >= 32 or b in (9, 10, 13))
-            data = json.loads(data)
+            data = json.loads(data.decode('latin1'), strict=False)
 
         if data["Ret"] in self.OK_CODES and command in data:
             return data[command]
