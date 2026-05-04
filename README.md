@@ -619,6 +619,49 @@ print(cam.get_upgrade_info())
 cam.upgrade("General_HZXM_IPC_HI3516CV300_50H20L_AE_S38_V4.03.R12.Nat.OnvifS.HIK.20181126_ALL.bin")
 ```
 
+## Enable telnet & ipctool backup
+
+`telnet_opener.py` uses the `OPSystemUpgrade` / `InstallDesc` exploit on
+Xiongmai cameras to run shell commands as root, with no firmware change.
+
+```sh
+# 1. Enable telnet on port 23 (camera reboots once).
+python3 telnet_opener.py 10.0.0.10
+
+# 2. Open a non-persistent shell on port 4321 (no reboot).
+python3 telnet_opener.py 10.0.0.10 -t
+
+# 3. Make a full hardware backup with ipctool, written to your NFS share.
+python3 telnet_opener.py 10.0.0.10 -b --nfs 10.0.0.1:/srv/ipctool
+```
+
+Default telnet credentials on Xiongmai stock firmware are `root` / `xmhdipc`.
+
+`-b/--backup` requires that telnet is already enabled (step 1) and that you
+export an NFS share containing the [`ipctool`][ipctool] ARM32 binary. The
+script telnets in, mounts your share at `/utils`, runs
+`ipctool backup /utils/backup-<MAC>`, and unmounts. The resulting
+`backup-<MAC>` file lives on your NFS server — nothing is uploaded to a
+third party.
+
+Minimal NFS server setup on the host machine:
+
+```sh
+# /etc/exports
+/srv/ipctool   10.0.0.0/8(rw,no_root_squash,no_subtree_check,insecure)
+```
+
+```sh
+sudo cp ipctool /srv/ipctool/
+sudo exportfs -arv
+```
+
+This replaces the previous cloud-upload flow that was disabled per
+[OpenIPC/ipctool#78][issue78] — backups now stay on your network.
+
+[ipctool]: https://github.com/OpenIPC/ipctool
+[issue78]: https://github.com/OpenIPC/ipctool/issues/78
+
 ## Monitor Script
 
 This script will persistently attempt to connect to camera at `CAMERA_IP`, will create a directory named `CAMERA_NAME` in `FILE_PATH` and start writing separate video and audio streams in files chunked in 10-minute clips, arranged in folders structured as `%Y/%m/%d`. It will also log what it does.

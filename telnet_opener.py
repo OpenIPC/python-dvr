@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 from dvrip import DVRIPCam
-from telnetlib import Telnet
 import argparse
 import datetime
 import json
 import os
+import re
 import socket
 import time
 import requests
@@ -63,14 +63,8 @@ conf = {
 
 
 def add_flashes(desc, swver):
-    board = conf.get(swver)
-    if board is None:
-        return
-
-    fls = []
-    for i in board["flashes"]:
-        fls.append({"FlashID": i})
-    desc["SupportFlashType"] = fls
+    board = conf.get(swver, XMV4)
+    desc["SupportFlashType"] = [{"FlashID": fid} for fid in board["flashes"]]
 
 
 def get_envtool(swver):
@@ -112,14 +106,63 @@ def cmd_telnetd(port):
     }
 
 
-def cmd_backup():
-    return [
-        {
-            "Command": "Shell",
-            "Script": "mount -o nolock 95.217.179.189:/srv/ro /utils/",
-        },
-        {"Command": "Shell", "Script": "/utils/ipctool -w"},
-    ]
+def _read_until(sock, token, timeout):
+    deadline = time.monotonic() + timeout
+    buf = bytearray()
+    sock.settimeout(0.5)
+    while time.monotonic() < deadline:
+        try:
+            chunk = sock.recv(4096)
+        except socket.timeout:
+            if token in buf:
+                break
+            continue
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if token in buf:
+            break
+    return bytes(buf)
+
+
+def do_backup_via_telnet(host_ip, nfs_share, mount_point="/utils"):
+    if not check_port(host_ip, 23):
+        print(f"Telnet (port 23) is not open on {host_ip}.")
+        print("Enable it first by running: "
+              f"python3 telnet_opener.py {host_ip}")
+        return
+
+    print(f"Connecting to {host_ip}:23 as root/xmhdipc")
+    s = socket.create_connection((host_ip, 23), timeout=10)
+    _read_until(s, b"login:", 5)
+    s.sendall(b"root\n")
+    _read_until(s, b"assword:", 5)
+    s.sendall(b"xmhdipc\n")
+    _read_until(s, b"# ", 5)
+
+    s.sendall(f"mkdir -p {mount_point}\n".encode())
+    _read_until(s, b"# ", 5)
+    s.sendall(f"mount -o nolock {nfs_share} {mount_point}\n".encode())
+    out = _read_until(s, b"# ", 10).decode(errors="replace")
+    print(out.strip())
+
+    s.sendall(b"cat /sys/class/net/eth0/address\n")
+    out = _read_until(s, b"# ", 5).decode(errors="replace")
+    m = re.search(r"([0-9a-f]{2}(?::[0-9a-f]{2}){5})", out.lower())
+    mac = m.group(1) if m else "unknown"
+
+    backup_path = f"{mount_point}/backup-{mac}"
+    print(f"Running ipctool backup -> {backup_path}")
+    s.sendall(f"{mount_point}/ipctool backup {backup_path}\n".encode())
+    out = _read_until(s, b"# ", 120).decode(errors="replace")
+    print(out.strip())
+
+    s.sendall(f"umount {mount_point}\n".encode())
+    _read_until(s, b"# ", 5)
+    s.sendall(b"exit\n")
+    s.close()
+    print(f"Done. Backup file is at {nfs_share.rstrip('/')}/backup-{mac} "
+          "on your NFS server.")
 
 
 def downgrade_old_version(cam, buildtime, swver):
@@ -158,8 +201,17 @@ def downgrade_old_version(cam, buildtime, swver):
 def open_telnet(host_ip, port, **kwargs):
     make_telnet = kwargs.get("telnet", False)
     make_backup = kwargs.get("backup", False)
+    nfs_share = kwargs.get("nfs")
     user = kwargs.get("username", "admin")
     password = kwargs.get("password", "")
+
+    if make_backup:
+        if not nfs_share:
+            print("--backup requires --nfs HOST:/exported/path "
+                  "(NFS share with ipctool, where the backup will be written)")
+            return
+        do_backup_via_telnet(host_ip, nfs_share)
+        return
 
     cam = DVRIPCam(host_ip, user=user, password=password)
     if not cam.login():
@@ -186,8 +238,6 @@ def open_telnet(host_ip, port, **kwargs):
     upcmd = []
     if make_telnet:
         upcmd.append(cmd_telnetd(port))
-    elif make_backup:
-        upcmd = cmd_backup()
     else:
         upcmd.append(cmd_armebenv(swver))
     desc["UpgradeCommand"] = upcmd
@@ -198,10 +248,6 @@ def open_telnet(host_ip, port, **kwargs):
     cam.upgrade(zipfname)
     cam.close()
     os.remove(zipfname)
-
-    if make_backup:
-        print("Check backup")
-        return
 
     if not make_telnet:
         port = 23
@@ -228,13 +274,22 @@ def main():
         "-p", "--password", default="", help="Password for camera login"
     )
     parser.add_argument(
-        "-b", "--backup", action="store_true", help="Make backup to the cloud"
+        "-b",
+        "--backup",
+        action="store_true",
+        help="Telnet in (root/xmhdipc), mount NFS, run ipctool backup "
+             "(requires --nfs and telnet already enabled on the camera)",
     )
     parser.add_argument(
         "-t",
         "--telnet",
         action="store_true",
         help="Open telnet port without rebooting camera",
+    )
+    parser.add_argument(
+        "--nfs",
+        help="NFS share for --backup, e.g. 10.0.0.1:/srv/ipctool. "
+             "Must contain the ipctool binary; backup-<MAC> is written here.",
     )
     args = parser.parse_args()
     open_telnet(args.hostname, TELNET_PORT, **vars(args))
