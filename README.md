@@ -625,24 +625,28 @@ cam.upgrade("General_HZXM_IPC_HI3516CV300_50H20L_AE_S38_V4.03.R12.Nat.OnvifS.HIK
 Xiongmai cameras to run shell commands as root, with no firmware change.
 
 ```sh
-# 1. Enable telnet on port 23 (camera reboots once).
+# Make a full hardware backup with ipctool, written to your NFS share.
+# Auto-enables telnet first if needed (camera reboots once on first run).
+python3 telnet_opener.py 10.0.0.10 -b --nfs 10.0.0.1:/srv/ipctool
+
+# Manual: just enable telnet (camera reboots once).
 python3 telnet_opener.py 10.0.0.10
 
-# 2. Open a non-persistent shell on port 4321 (no reboot).
+# Manual: open a non-persistent shell on port 4321 (no reboot).
 python3 telnet_opener.py 10.0.0.10 -t
-
-# 3. Make a full hardware backup with ipctool, written to your NFS share.
-python3 telnet_opener.py 10.0.0.10 -b --nfs 10.0.0.1:/srv/ipctool
 ```
 
 Default telnet credentials on Xiongmai stock firmware are `root` / `xmhdipc`.
 
-`-b/--backup` requires that telnet is already enabled (step 1) and that you
-export an NFS share containing the [`ipctool`][ipctool] ARM32 binary. The
-script telnets in, mounts your share at `/utils`, runs
-`ipctool backup /utils/backup-<MAC>`, and unmounts. The resulting
-`backup-<MAC>` file lives on your NFS server — nothing is uploaded to a
-third party.
+`-b/--backup` is self-contained and exits 0 / non-0 for use in scripts and
+agentic automation. It checks for telnet on port 23 — if closed, it runs
+the InstallDesc exploit to enable it (this reboots the camera once) and
+waits up to 3 minutes for the camera to come back. Then it telnets in,
+mounts your NFS share at `/utils`, runs `ipctool backup
+/utils/backup-<MAC>`, and unmounts. The resulting `backup-<MAC>` file
+lives on your NFS server — nothing is uploaded to a third party.
+
+The NFS share must contain the [`ipctool`][ipctool] ARM32 binary.
 
 Minimal NFS server setup on the host machine:
 
