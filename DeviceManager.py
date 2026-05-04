@@ -172,7 +172,7 @@ def local_ip():
     )
 
 
-def sofia_hash(self, password):
+def sofia_hash(password):
     md5 = hashlib.md5(bytes(password, "utf-8")).digest()
     chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     return "".join([chars[sum(x) % 62] for x in zip(md5[::2], md5[1::2])])
@@ -447,7 +447,7 @@ def ConfigXM(data):
     config[u"GateWay"] = SetIP(data[4])
     config[u"HostIP"] = SetIP(data[2])
     config[u"Submask"] = SetIP(data[3])
-    config[u"Username"] = "admin"
+    config[u"Username"] = data[6]
     config[u"Password"] = sofia_hash(data[5])
     devices[data[1]][u"GateWay"] = config[u"GateWay"]
     devices[data[1]][u"HostIP"] = config[u"HostIP"]
@@ -934,12 +934,16 @@ class GUITk:
         self.l5.grid(row=6, column=0, pady=3, padx=5, sticky=W + N)
         self.tcp = Entry(self.fr_config, width=5, font="6")
         self.tcp.grid(row=6, column=1, pady=3, padx=5, sticky=W + N)
+        self.l8 = Label(self.fr_config, text=_("Username"))
+        self.l8.grid(row=7, column=0, pady=3, padx=5, sticky=W + N)
+        self.username = Entry(self.fr_config, width=15, font="6")
+        self.username.grid(row=7, column=1, pady=3, padx=5, sticky=W + N)
         self.l6 = Label(self.fr_config, text=_("Password"))
-        self.l6.grid(row=7, column=0, pady=3, padx=5, sticky=W + N)
+        self.l6.grid(row=8, column=0, pady=3, padx=5, sticky=W + N)
         self.passw = Entry(self.fr_config, width=15, font="6")
-        self.passw.grid(row=7, column=1, pady=3, padx=5, sticky=W + N)
+        self.passw.grid(row=8, column=1, pady=3, padx=5, sticky=W + N)
         self.aply = Button(self.fr_config, text=_("Apply"), command=self.setconfig)
-        self.aply.grid(row=8, column=1, pady=3, padx=5, sticky="ew")
+        self.aply.grid(row=9, column=1, pady=3, padx=5, sticky="ew")
 
         self.l7 = Label(self.fr_tools, text=_("Vendor"))
         self.l7.grid(row=0, column=0, pady=3, padx=5, sticky="wns")
@@ -1020,6 +1024,8 @@ class GUITk:
         self.http.insert(END, devices[dev]["HttpPort"])
         self.tcp.delete(0, END)
         self.tcp.insert(END, devices[dev]["TCPPort"])
+        self.username.delete(0, END)
+        self.username.insert(END, devices[dev].get("Username", "admin"))
 
     def setconfig(self):
         dev = self.table.item(self.table.selection()[0], option="values")[0]
@@ -1034,6 +1040,7 @@ class GUITk:
                 self.mask.get(),
                 self.gate.get(),
                 self.passw.get(),
+                self.username.get(),
             ]
         )
         if result["Ret"] == 100:
