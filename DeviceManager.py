@@ -203,6 +203,7 @@ def GetAllAddr():
             if "inet " in x and "127.0." not in x
         ]
 
+
 def SearchXM(devices):
     server = socket(AF_INET, SOCK_DGRAM)
     server.bind(("", 34569))
@@ -437,7 +438,6 @@ def SearchBeward(devices):
 
 def ConfigXM(data):
     config = {}
-
     #TODO: may be just copy whwole devices[data[1]] to config?
     for k in [u"HostName",u"HttpPort",u"MAC",u"MaxBps",u"MonMode",u"SSLPort",u"TCPMaxConn",u"TCPPort",u"TransferPlan",u"UDPPort","UseHSDownLoad"]:
         if k in devices[data[1]]:
@@ -447,9 +447,8 @@ def ConfigXM(data):
     config[u"GateWay"] = SetIP(data[4])
     config[u"HostIP"] = SetIP(data[2])
     config[u"Submask"] = SetIP(data[3])
-    config[u"Username"] = data[6] #"admin"
+    config[u"Username"] = data[6]
     config[u"Password"] = sofia_hash(data[5])
-
     devices[data[1]][u"GateWay"] = config[u"GateWay"]
     devices[data[1]][u"HostIP"] = config[u"HostIP"]
     devices[data[1]][u"Submask"] = config[u"Submask"]
@@ -935,12 +934,12 @@ class GUITk:
         self.l5.grid(row=6, column=0, pady=3, padx=5, sticky=W + N)
         self.tcp = Entry(self.fr_config, width=5, font="6")
         self.tcp.grid(row=6, column=1, pady=3, padx=5, sticky=W + N)
-        self.l6 = Label(self.fr_config, text=_("Username"))
-        self.l6.grid(row=7, column=0, pady=3, padx=5, sticky=W + N)
+        self.l8 = Label(self.fr_config, text=_("Username"))
+        self.l8.grid(row=7, column=0, pady=3, padx=5, sticky=W + N)
         self.username = Entry(self.fr_config, width=15, font="6")
         self.username.grid(row=7, column=1, pady=3, padx=5, sticky=W + N)
         self.l6 = Label(self.fr_config, text=_("Password"))
-        self.l6.grid(row=8, column=0, pady=3, padx=5, sticky=W + N)        
+        self.l6.grid(row=8, column=0, pady=3, padx=5, sticky=W + N)
         self.passw = Entry(self.fr_config, width=15, font="6")
         self.passw.grid(row=8, column=1, pady=3, padx=5, sticky=W + N)
         self.aply = Button(self.fr_config, text=_("Apply"), command=self.setconfig)
@@ -1026,7 +1025,7 @@ class GUITk:
         self.tcp.delete(0, END)
         self.tcp.insert(END, devices[dev]["TCPPort"])
         self.username.delete(0, END)
-        self.username.insert(END, "admin")
+        self.username.insert(END, devices[dev].get("Username", "admin"))
 
     def setconfig(self):
         dev = self.table.item(self.table.selection()[0], option="values")[0]
