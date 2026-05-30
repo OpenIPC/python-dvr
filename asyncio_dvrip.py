@@ -580,6 +580,14 @@ class DVRIPCam(object):
             code = 1042
         return await self.get_command("Simplify.Encode", code)
 
+    async def get_detect_info(self):
+        """Read 'Detect' config: per-channel MotionDetect / HumanDetection / etc."""
+        return await self.get_info("Detect")
+
+    async def set_detect_info(self, data):
+        """Update 'Detect' config. Sparse payloads are merged with current state."""
+        return await self.set_info("Detect", data)
+
     async def recv_json(self, buf=bytearray()):
         p = compile(b".*({.*})")
 
