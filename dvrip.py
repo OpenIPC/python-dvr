@@ -27,8 +27,10 @@ class DVRIPCam(object):
         105: "User is not logged in",
         106: "Username or password is incorrect",
         107: "User does not have necessary permissions",
+        124: "Algorith error"
         203: "Password is incorrect",
         205: 'User does not exist',
+        205: 'IP locked',
         207: 'Blacklisted',
         511: "Start of upgrade",
         512: "Upgrade was not started",
