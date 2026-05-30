@@ -40,7 +40,7 @@ while True:
         sleep(0.1)  # Just for recive whole packet
         data = conn.recv(len_data)
         conn.close()
-        reply = json.loads(data, encoding="utf8")
+        reply = json.loads(data.decode("utf-8", errors="replace").rstrip("\x00\n"))
         print(datetime.now().strftime("[%Y-%m-%d %H:%M:%S]>>>"))
         print(head, version, session, sequence_number, msgid, len_data)
         print(json.dumps(reply, indent=4, sort_keys=True))
