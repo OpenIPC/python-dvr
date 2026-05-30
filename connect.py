@@ -27,6 +27,13 @@ info["OSDInfo"][0]["OSDInfoWidget"]["PreviewBlend"] = True
 # info["OSDInfo"][0]["OSDInfoWidget"]["RelativePos"] = [6144,6144,8192,8192]
 cam.set_info("fVideo.OSDInfo", info)
 # enc_info = cam.get_info("Simplify.Encode")
+# Motion detection: turn it on and route events into recording.
+# cam.set_detect_info({
+#     "MotionDetect":   [{"Enable": True,
+#                         "EventHandler": {"RecordEnable": True},
+#                         "Level": 5}],
+#     "HumanDetection": [{"Enable": False}],
+# })
 # Alarm example
 def alarm(content, ids):
     print(content)

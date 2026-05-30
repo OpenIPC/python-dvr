@@ -703,6 +703,14 @@ class DVRIPCam(object):
             code = 1042
         return self.get_command("Simplify.Encode", code)
 
+    def get_detect_info(self):
+        """Read 'Detect' config: per-channel MotionDetect / HumanDetection / etc."""
+        return self.get_info("Detect")
+
+    def set_detect_info(self, data):
+        """Update 'Detect' config. Sparse payloads are merged with current state."""
+        return self.set_info("Detect", data)
+
     def recv_json(self, buf=bytearray()):
         p = compile(b".*({.*})")
 

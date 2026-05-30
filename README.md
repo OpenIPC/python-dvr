@@ -460,6 +460,43 @@ cloudEnabled = False
 cam.set_info("NetWork.Nat", { "NatEnable" : cloudEnabled })
 ```
 
+## Motion detection
+
+Xiongmai cameras typically do **not** expose ONVIF `AnalyticsService`, so
+motion detection cannot be configured through ONVIF. On some firmwares it
+is also off by default. Configure it directly over the native protocol via
+the `Detect` config path:
+
+```python
+# Inspect current config (per-channel arrays)
+print(cam.get_detect_info())
+# {'HumanDetection': [{'Enable': False, ...}],
+#  'MotionDetect':  [{'Enable': True,
+#                     'EventHandler': {'RecordEnable': True,
+#                                      'AlarmOutEnable': False, ...},
+#                     'Level': 5}]}
+
+# Enable motion detection at sensitivity 5 with event-triggered recording.
+# Sparse payloads are merged — fields you omit keep their current values.
+cam.set_detect_info({
+    "MotionDetect":   [{"Enable": True,
+                        "EventHandler": {"RecordEnable": True},
+                        "Level": 5}],
+    "HumanDetection": [{"Enable": False}],
+})
+```
+
+The equivalent low-level call is `cam.set_info("Detect", ...)` — both
+shapes work; the wrapper just documents the path.
+
+Receiving the events is a separate problem. Some XM firmwares push
+`AlarmInfo` packets over the existing TCP session, so registering
+`setAlarm()` + `alarmStart()` is enough; on others the camera only emits
+to a separately-configured alarm server (see `AlarmServer.py` and the
+`EventHandler.AlarmInfo` / `MsgtoNetEnable` fields). If `setAlarm()`
+silently produces no callbacks even while recordings show motion is
+detected, the camera is likely in the latter group.
+
 ## Add user and change password
 
 ```python
