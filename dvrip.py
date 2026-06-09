@@ -879,7 +879,7 @@ class DVRIPCam(object):
                 elif data_type == 0x1F9:
                     (media, n, length) = struct.unpack("BBH", packet[4:frame_len])
                 # special case of JPEG shapshots
-                elif data_type == 0xFFD8FFE0:
+                elif data_type == 0xFFD8FFE0 or data_type == 0xFFD8FFDB:
                     return packet
                 else:
                     raise ValueError(data_type)
