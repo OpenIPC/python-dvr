@@ -22,11 +22,13 @@ def load_config():
         return namedtuple("X", config_dict.keys())(*config_dict.values())
 
     config_path = os.environ.get("CONFIG_PATH")
-    if Path(config_path).exists():
+    if config_path and Path(config_path).exists():
         with open(config_path, "r") as file:
             return json.loads(file.read(), object_hook=config_decoder)
 
-    return {
+    cooldown = os.environ.get("COOLDOWN")
+    dump_local_files = os.environ.get("DUMP_LOCAL_FILES")
+    return config_decoder({
         "host_ip": os.environ.get("IP_ADDRESS"),
         "user": os.environ.get("USER"),
         "password": os.environ.get("PASSWORD"),
@@ -36,11 +38,11 @@ def load_config():
         "start": os.environ.get("START"),
         "end": os.environ.get("END"),
         "blacklist_path": os.environ.get("BLACKLIST_PATH"),
-        "cooldown": int(os.environ.get("COOLDOWN")),
+        "cooldown": int(cooldown) if cooldown else 0,
         "dump_local_files": (
-            os.environ.get("DUMP_LOCAL_FILES").lower() in ["true", "1", "y", "yes"]
+            (dump_local_files or "").lower() in ["true", "1", "y", "yes"]
         ),
-    }
+    })
 
 
 def main():
@@ -51,7 +53,7 @@ def main():
     cooldown = config.cooldown
 
     blacklist = None
-    if Path(config.blacklist_path).exists():
+    if config.blacklist_path and Path(config.blacklist_path).exists():
         with open(config.blacklist_path, "r") as file:
             blacklist = [line.rstrip() for line in file]
 
