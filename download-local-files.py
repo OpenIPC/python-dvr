@@ -96,7 +96,12 @@ def main():
                     target_filetype=config.target_filetype_video,
                 )
 
-            if config.dump_local_files:
+            if config.dump_local_files and not config.blacklist_path:
+                logger.warning(
+                    "dump_local_files is enabled but blacklist_path is not set; "
+                    "skipping dump to avoid writing to 'None.dmp'."
+                )
+            elif config.dump_local_files:
                 logger.debug(f"Dumping local files...")
                 solarCam.dump_local_files(
                     videos,
