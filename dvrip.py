@@ -771,7 +771,7 @@ class DVRIPCam(object):
         self.logger.debug("Starting upgrade...")
         while True:
             data, rcvd = self.recv_json(rcvd)
-            self.logger.debug(reply)
+            self.logger.debug(data)
             if data is None:
                 vprint("\nDone")
                 return
