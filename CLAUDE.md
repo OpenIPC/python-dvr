@@ -27,11 +27,10 @@ lint/test/build commands. Key entry points:
   range; config from `NVRVideoDownloader.json` (or path in
   `$NVRVIDEODOWNLOADER_CFG`).
 - `python3 download-local-files.py` — solar/battery-camera pull loop; the
-  Docker `CMD`. Reads config from the JSON file at `$CONFIG_PATH`. (An
-  individual-env-var fallback exists in `load_config()` but is currently
-  broken — it does `Path(config_path)` with `config_path=None` when the
-  var is unset, and returns a plain dict where `main()` expects
-  attribute access — so treat `$CONFIG_PATH` as required.)
+  Docker `CMD`. Reads config from the JSON file at `$CONFIG_PATH`, or
+  falls back to individual env vars (`IP_ADDRESS`, `COOLDOWN`, ...) when
+  `$CONFIG_PATH` is unset. Both paths return the same attribute-accessible
+  namedtuple via `config_decoder`.
 - `python3 AlarmServer.py [port]` — standalone TCP server that logs
   `AlarmInfo` packets pushed by cameras configured to report to an
   external alarm center.
