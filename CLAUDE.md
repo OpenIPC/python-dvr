@@ -27,7 +27,11 @@ lint/test/build commands. Key entry points:
   range; config from `NVRVideoDownloader.json` (or path in
   `$NVRVIDEODOWNLOADER_CFG`).
 - `python3 download-local-files.py` — solar/battery-camera pull loop; the
-  Docker `CMD`. Config from `$CONFIG_PATH` JSON or individual env vars.
+  Docker `CMD`. Reads config from the JSON file at `$CONFIG_PATH`. (An
+  individual-env-var fallback exists in `load_config()` but is currently
+  broken — it does `Path(config_path)` with `config_path=None` when the
+  var is unset, and returns a plain dict where `main()` expects
+  attribute access — so treat `$CONFIG_PATH` as required.)
 - `python3 AlarmServer.py [port]` — standalone TCP server that logs
   `AlarmInfo` packets pushed by cameras configured to report to an
   external alarm center.
@@ -60,10 +64,14 @@ DRY-shared.
 
 ### The wire protocol (the part that requires reading the code)
 
-- Every packet is a 20-byte binary header + JSON body, packed as
+- Every packet starts with the same 20-byte binary header, packed as
   `struct "BB2xII2xHI"` = magic `0xFF`, version, **session id**, packet
-  count, **message id (QCODE)**, body length. Bodies are UTF-8 JSON,
-  terminated with `\x0a\x00` (v0) or `\x00` (v1).
+  count, **message id (QCODE)**, body length. **Control** packets carry a
+  UTF-8 JSON body terminated with `\x0a\x00` (v0) or `\x00` (v1).
+  **Media** packets (monitor stream, snapshot, file/firmware downloads)
+  carry raw binary bodies instead — decoded by `reassemble_bin_payload()`,
+  which reads its own per-frame stream header (data-type/codec + packed
+  timestamp), not JSON. Don't route binary responses through JSON parsing.
 - **`QCODES`** (dict on `DVRIPCam`) maps human names → numeric message
   ids. `OPFEED_QCODES` holds the pet-feeder codes with separate SET/GET
   variants. To add a command you generally add a QCODE and a thin wrapper
@@ -72,8 +80,11 @@ DRY-shared.
   8-char digest over the MD5 (not a standard hash; don't substitute).
   `login()` (QCODE 1000) returns a session id used in all later headers;
   `keep_alive()` must run to hold the session.
-- `send()` / `send_custom()` serialize+frame a request and block for the
-  reply (`socket_recv(20)` header then body). `get_file()` /
+- `send()` / `send_custom()` serialize+frame a request and, by default
+  (`wait_response=True`), block for the reply (`socket_recv(20)` header
+  then body). Passing `wait_response=False` sends fire-and-forget and
+  reads nothing — snapshot and monitor startup use this, then pull their
+  binary streams separately via `reassemble_bin_payload()`. `get_file()` /
   `get_specific_size()` handle bulk/binary responses (snapshots, file
   downloads, firmware). `OK_CODES = [100, 515]` indicate success in `Ret`.
 
@@ -92,9 +103,17 @@ a UI setting maps to.
 
 ### Streaming and events
 
-- `start_monitor(callback, user)` / `stop_monitor()` — spawn a thread that
-  delivers `(frame, meta, user)`; the caller decides what to do (write
+- `start_monitor(callback, user)` / `stop_monitor()` — `start_monitor`
+  runs its receive loop **synchronously on the calling thread**, invoking
+  `callback(frame, meta, user)` per frame until `self.monitoring` is
+  cleared; it does **not** spawn a thread, so it blocks the caller. To
+  stop it you either call `stop_monitor()` from inside the callback or run
+  `start_monitor` on your own worker thread and call `stop_monitor()` from
+  another. The caller decides what to do with each frame (write
   H.264/H.265, count frames, etc.). `snapshot()` grabs a single JPEG.
+  (`alarmStart()` is the method that actually spawns a background
+  `threading.Thread`; don't conflate `start_monitor`'s inline loop with
+  it, or with the `asyncio_dvrip.py` client.)
 - Alarms: `setAlarm(fn)` + `alarmStart()` register a handler and start
   `alarm_thread`, which reads `AlarmInfo` (QCODE 1504) pushed over the
   existing session. **Important quirk:** some firmwares only emit to a
