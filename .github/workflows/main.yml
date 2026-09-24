@@ -7,6 +7,9 @@ on:
 jobs:
   docker:
     runs-on: ubuntu-latest
+    # Publish only from master, even for manual workflow_dispatch runs, so a
+    # dispatch from a feature branch can't overwrite the :latest image.
+    if: github.ref == 'refs/heads/master'
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
