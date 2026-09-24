@@ -18,6 +18,10 @@ class SomethingIsWrongWithCamera(Exception):
 
 class DVRIPCam(object):
     DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+    # Device return codes reported in the JSON "Ret" field. Numbers and
+    # meanings follow the Xiongmai DVRIP interface protocol return-code table
+    # (doc/, section 6.1 "return code definition"); 124 is kept from field
+    # observation and is not part of that table.
     CODES = {
         100: "OK",
         101: "Unknown error",
@@ -27,16 +31,54 @@ class DVRIPCam(object):
         105: "User is not logged in",
         106: "Username or password is incorrect",
         107: "User does not have necessary permissions",
+        108: "Timeout",
+        109: "Search failed, no matching file",
+        110: "Search succeeded, all files returned",
+        111: "Search succeeded, some files returned",
+        112: "User already exists",
+        113: "User does not exist",
+        114: "User group already exists",
+        115: "User group does not exist",
+        117: "Message format error",
+        118: "PTZ protocol not set",
+        119: "No file found",
+        120: "Configuration enabled",
+        121: "Digital channel not connected",
         124: "Algorith error",
+        150: "Operation successful, device restart required",
+        202: "User not logged in",
         203: "Password is incorrect",
-        205: 'User does not exist',
-        205: 'IP locked',
-        207: 'Blacklisted',
+        204: "User is invalid",
+        205: "IP locked",
+        206: "User is in the blacklist",
+        207: "Blacklisted",
+        208: "Input is invalid",
+        209: "Duplicate index (object to add already exists)",
+        210: "Object does not exist (query)",
+        211: "Object does not exist",
+        212: "Account is in use",
+        213: "Subset out of range (permissions exceed allowed scope)",
+        214: "Password is invalid",
+        215: "Passwords do not match",
+        216: "Reserved account",
+        502: "Command is invalid",
+        503: "Talk is already open",
+        504: "Talk is not open",
         511: "Start of upgrade",
         512: "Upgrade was not started",
         513: "Upgrade data errors",
         514: "Upgrade error",
         515: "Upgrade successful",
+        521: "Restore to default failed",
+        522: "Device restart required",
+        523: "Default configuration is invalid",
+        602: "Application restart required",
+        603: "System restart required",
+        604: "File write error",
+        605: "Feature not supported",
+        606: "Verification failed",
+        607: "Configuration does not exist",
+        608: "Configuration parse error",
     }
     QCODES = {
         "AuthorityList": 1470,
@@ -95,7 +137,7 @@ class DVRIPCam(object):
         "R": "Right",
         "D": "Down",
     }
-    OK_CODES = [100, 515]
+    OK_CODES = [100, 150, 515]
     PORTS = {
         "tcp": 34567,
         "udp": 34568,
@@ -501,9 +543,42 @@ class DVRIPCam(object):
             return False
         return True
 
-    def reboot(self):
+    def reboot(self, wait=15):
         self.set_command("OPMachine", {"Action": "Reboot"})
+        # Xiongmai/Sofia firmware acks the Reboot with Ret 100 but defers the
+        # actual reboot by ~10s, and *cancels* it if the TCP control connection
+        # is torn down before then. Closing the socket immediately (as this used
+        # to) therefore silently aborts the reboot on such devices. Keep the link
+        # open until the device drops it (it is rebooting) or `wait` seconds pass.
+        self._wait_for_disconnect(wait)
         self.close()
+
+    def _wait_for_disconnect(self, timeout):
+        if self.socket is None:
+            return
+        # Stop our own keepalive first: it is only a local timer, cancelling it
+        # does not touch the link, and it avoids a second reader on the socket.
+        try:
+            if self.alive:
+                self.alive.cancel()
+        except Exception:
+            pass
+        # Bound the total wait with an absolute deadline: unsolicited traffic on
+        # the control socket (e.g. alarm pushes) must not keep resetting a
+        # per-recv timeout and hold the caller inside reboot() past `timeout`.
+        deadline = time.monotonic() + timeout
+        try:
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.socket.settimeout(remaining)
+                # b"" => device closed the connection (graceful reboot); a
+                # timeout or reset raises OSError (device vanished mid-reboot).
+                if not self.socket.recv(64):
+                    break
+        except OSError:
+            pass
 
     def setAlarm(self, func):
         self.alarm_func = func

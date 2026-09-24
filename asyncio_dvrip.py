@@ -13,6 +13,10 @@ class SomethingIsWrongWithCamera(Exception):
 
 class DVRIPCam(object):
     DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+    # Device return codes reported in the JSON "Ret" field. Numbers and
+    # meanings follow the Xiongmai DVRIP interface protocol return-code table
+    # (doc/, section 6.1 "return code definition"); 124 is kept from field
+    # observation and is not part of that table.
     CODES = {
         100: "OK",
         101: "Unknown error",
@@ -22,12 +26,54 @@ class DVRIPCam(object):
         105: "User is not logged in",
         106: "Username or password is incorrect",
         107: "User does not have necessary permissions",
+        108: "Timeout",
+        109: "Search failed, no matching file",
+        110: "Search succeeded, all files returned",
+        111: "Search succeeded, some files returned",
+        112: "User already exists",
+        113: "User does not exist",
+        114: "User group already exists",
+        115: "User group does not exist",
+        117: "Message format error",
+        118: "PTZ protocol not set",
+        119: "No file found",
+        120: "Configuration enabled",
+        121: "Digital channel not connected",
+        124: "Algorith error",
+        150: "Operation successful, device restart required",
+        202: "User not logged in",
         203: "Password is incorrect",
+        204: "User is invalid",
+        205: "IP locked",
+        206: "User is in the blacklist",
+        207: "Blacklisted",
+        208: "Input is invalid",
+        209: "Duplicate index (object to add already exists)",
+        210: "Object does not exist (query)",
+        211: "Object does not exist",
+        212: "Account is in use",
+        213: "Subset out of range (permissions exceed allowed scope)",
+        214: "Password is invalid",
+        215: "Passwords do not match",
+        216: "Reserved account",
+        502: "Command is invalid",
+        503: "Talk is already open",
+        504: "Talk is not open",
         511: "Start of upgrade",
         512: "Upgrade was not started",
         513: "Upgrade data errors",
         514: "Upgrade error",
         515: "Upgrade successful",
+        521: "Restore to default failed",
+        522: "Device restart required",
+        523: "Default configuration is invalid",
+        602: "Application restart required",
+        603: "System restart required",
+        604: "File write error",
+        605: "Feature not supported",
+        606: "Verification failed",
+        607: "Configuration does not exist",
+        608: "Configuration parse error",
     }
     QCODES = {
         "AuthorityList": 1470,
@@ -73,7 +119,7 @@ class DVRIPCam(object):
         "R": "Right",
         "D": "Down",
     }
-    OK_CODES = [100, 515]
+    OK_CODES = [100, 150, 515]
     PORTS = {
         "tcp": 34567,
         "udp": 34568,
@@ -396,9 +442,18 @@ class DVRIPCam(object):
             return False
         return True
 
-    async def reboot(self):
+    async def reboot(self, wait=15):
         await self.set_command("OPMachine", {"Action": "Reboot"})
-        self.close()
+        # See dvrip.py reboot(): Xiongmai/Sofia firmware acks the Reboot but
+        # defers it by ~10s and cancels it if the control connection is closed
+        # first. Keep the link open for `wait` seconds so the device commits the
+        # reboot, then close. (Closing immediately silently aborted the reboot.)
+        # close() runs in finally so a cancellation during the sleep still tears
+        # down the writer (and its keepalive task) instead of leaking it.
+        try:
+            await asyncio.sleep(wait)
+        finally:
+            self.close()
 
     def setAlarm(self, func):
         self.alarm_func = func
