@@ -47,8 +47,11 @@ own `requirements.txt` and is self-contained.
 ### Docker / CI
 
 `Dockerfile` runs `download-local-files.py`. `.github/workflows/main.yml`
-builds and pushes that image to Docker Hub on every branch push;
-`codeql.yml` runs CodeQL Python analysis on master.
+builds and pushes that image to Docker Hub on pushes to `master` (only
+when the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets are set — it skips
+the publish otherwise); `codeql.yml` runs CodeQL Python analysis on
+master. `.github/workflows/test.yml` lint/smoke-tests the library on
+pushes and PRs.
 
 ## Architecture
 
