@@ -448,8 +448,12 @@ class DVRIPCam(object):
         # defers it by ~10s and cancels it if the control connection is closed
         # first. Keep the link open for `wait` seconds so the device commits the
         # reboot, then close. (Closing immediately silently aborted the reboot.)
-        await asyncio.sleep(wait)
-        self.close()
+        # close() runs in finally so a cancellation during the sleep still tears
+        # down the writer (and its keepalive task) instead of leaking it.
+        try:
+            await asyncio.sleep(wait)
+        finally:
+            self.close()
 
     def setAlarm(self, func):
         self.alarm_func = func

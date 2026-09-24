@@ -563,13 +563,20 @@ class DVRIPCam(object):
                 self.alive.cancel()
         except Exception:
             pass
+        # Bound the total wait with an absolute deadline: unsolicited traffic on
+        # the control socket (e.g. alarm pushes) must not keep resetting a
+        # per-recv timeout and hold the caller inside reboot() past `timeout`.
+        deadline = time.monotonic() + timeout
         try:
-            self.socket.settimeout(timeout)
-            # b"" => device closed the connection (graceful reboot); a timeout or
-            # reset raises OSError (device vanished mid-reboot). Either way we are
-            # done keeping the link alive.
-            while self.socket.recv(64):
-                pass
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                self.socket.settimeout(remaining)
+                # b"" => device closed the connection (graceful reboot); a
+                # timeout or reset raises OSError (device vanished mid-reboot).
+                if not self.socket.recv(64):
+                    break
         except OSError:
             pass
 
