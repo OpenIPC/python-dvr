@@ -10,14 +10,15 @@ jobs:
     # Publish only from master, even for manual workflow_dispatch runs, so a
     # dispatch from a feature branch can't overwrite the :latest image.
     if: github.ref == 'refs/heads/master'
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       # Without DockerHub credentials the publish can't run; skip it (and keep
-      # the job green) instead of failing every push to master.
+      # the job green) instead of failing every push to master. The secrets are
+      # scoped to this step only (the login action takes them via its inputs).
       - name: Check DockerHub credentials
         id: creds
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
