@@ -396,8 +396,13 @@ class DVRIPCam(object):
             return False
         return True
 
-    async def reboot(self):
+    async def reboot(self, wait=15):
         await self.set_command("OPMachine", {"Action": "Reboot"})
+        # See dvrip.py reboot(): Xiongmai/Sofia firmware acks the Reboot but
+        # defers it by ~10s and cancels it if the control connection is closed
+        # first. Keep the link open for `wait` seconds so the device commits the
+        # reboot, then close. (Closing immediately silently aborted the reboot.)
+        await asyncio.sleep(wait)
         self.close()
 
     def setAlarm(self, func):

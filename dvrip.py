@@ -501,9 +501,35 @@ class DVRIPCam(object):
             return False
         return True
 
-    def reboot(self):
+    def reboot(self, wait=15):
         self.set_command("OPMachine", {"Action": "Reboot"})
+        # Xiongmai/Sofia firmware acks the Reboot with Ret 100 but defers the
+        # actual reboot by ~10s, and *cancels* it if the TCP control connection
+        # is torn down before then. Closing the socket immediately (as this used
+        # to) therefore silently aborts the reboot on such devices. Keep the link
+        # open until the device drops it (it is rebooting) or `wait` seconds pass.
+        self._wait_for_disconnect(wait)
         self.close()
+
+    def _wait_for_disconnect(self, timeout):
+        if self.socket is None:
+            return
+        # Stop our own keepalive first: it is only a local timer, cancelling it
+        # does not touch the link, and it avoids a second reader on the socket.
+        try:
+            if self.alive:
+                self.alive.cancel()
+        except Exception:
+            pass
+        try:
+            self.socket.settimeout(timeout)
+            # b"" => device closed the connection (graceful reboot); a timeout or
+            # reset raises OSError (device vanished mid-reboot). Either way we are
+            # done keeping the link alive.
+            while self.socket.recv(64):
+                pass
+        except OSError:
+            pass
 
     def setAlarm(self, func):
         self.alarm_func = func
