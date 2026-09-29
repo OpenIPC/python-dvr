@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from dvrip import DVRIPCam
+from dvrip import DVRIPCam, SomethingIsWrongWithCamera
 import argparse
 import datetime
 import json
@@ -190,7 +190,9 @@ def enable_telnet_via_dvrip(host_ip, user="admin", password="",
             cam.close()
         else:
             print("Could not log back in to reboot; camera may reboot itself.")
-    except (OSError, TypeError, KeyError, ValueError):
+    except (OSError, SomethingIsWrongWithCamera, TypeError, KeyError, ValueError):
+        # SomethingIsWrongWithCamera is what DVRIPCam.connect() raises when the
+        # socket connect fails, which is exactly what a mid-reboot camera does.
         print("Camera is not answering DVRIP; it is most likely rebooting already.")
 
     print(f"Waiting for telnet, probing {list(ports)}...")
