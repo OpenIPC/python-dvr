@@ -674,6 +674,9 @@ python3 telnet_opener.py 10.0.0.10 -t
 ```
 
 Default telnet credentials on Xiongmai stock firmware are `root` / `xmhdipc`.
+Firmware built from 2021 on (e.g. `HI3516EV300_85H50AI` `000529B2` build
+2021-03-03, and a 2024 `GK7201V200` build) uses `root` / `Hp#!8CocD_g` instead;
+the tool tries both.
 
 `-b/--backup` is self-contained and exits 0 / non-0 for use in scripts and
 agentic automation. It checks for telnet on port 23 — if closed, it runs

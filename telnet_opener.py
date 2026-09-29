@@ -19,6 +19,15 @@ ARCHIVE_URL = "https://github.com/widgetii/xmupdates/raw/main/archive"
 # (`telnetctrl 1`); 50119 was observed on GK7205V300 + 000699H7.
 DEFAULT_TELNET_PORTS = (23, 4321, 50119)
 
+# Root passwords of the stock telnet, tried in order. The password changed
+# between firmware builds: xmhdipc is the classic one; builds from 2021 on
+# (seen on HI3516EV300_85H50AI 000529B2 build 2021-03-03 and on a 2024
+# GK7201V200 build) use Hp#!8CocD_g.
+TELNET_CREDENTIALS = (
+    ("root", "xmhdipc"),
+    ("root", "Hp#!8CocD_g"),
+)
+
 # InstallDesc that bypasses Hardware/Vendor/Flash validation ("SkipCheck"
 # magic) and flips `telnetctrl=1` via both env tool variants. Works on
 # post-2020-05-07 XM firmware where a hardware-specific InstallDesc has
@@ -171,22 +180,47 @@ def enable_telnet_via_dvrip(host_ip, user="admin", password="",
     # `armbenv -s telnetctrl 1` only writes the env var; the telnet
     # daemon is launched by an init script on next boot.
     print("Rebooting camera to apply telnetctrl=1...")
-    cam = DVRIPCam(host_ip, user=user, password=password)
-    if cam.login():
-        cam.reboot()
-        cam.close()
-    else:
-        print("Could not log back in to reboot; camera may reboot itself.")
+    # The updater usually reboots the camera by itself once the upload is
+    # done, so this login can meet a dropped or silent connection -- which
+    # dvrip.py surfaces as an exception, not as a False return.
+    try:
+        cam = DVRIPCam(host_ip, user=user, password=password)
+        if cam.login():
+            cam.reboot()
+            cam.close()
+        else:
+            print("Could not log back in to reboot; camera may reboot itself.")
+    except (OSError, TypeError, KeyError, ValueError):
+        print("Camera is not answering DVRIP; it is most likely rebooting already.")
 
     print(f"Waiting for telnet, probing {list(ports)}...")
     deadline = time.monotonic() + wait_timeout
     while time.monotonic() < deadline:
         for p in ports:
             if check_port(host_ip, p):
-                print(f"Telnet open on {host_ip}:{p} (login: root / xmhdipc)")
+                logins = " or ".join(f"{u} / {pw}" for u, pw in TELNET_CREDENTIALS)
+                print(f"Telnet open on {host_ip}:{p} (login: {logins})")
                 return p
         time.sleep(4)
     print(f"Timed out after {wait_timeout}s; probe ports manually.")
+    return None
+
+
+def telnet_login(host_ip, port, credentials=TELNET_CREDENTIALS):
+    """Open a telnet shell, trying each known root credential. Returns a
+    connected socket sitting at the shell prompt, or None if none work."""
+    for user, pw in credentials:
+        s = socket.create_connection((host_ip, port), timeout=10)
+        _read_until(s, b"login:", 5)
+        s.sendall(user.encode() + b"\n")
+        _read_until(s, b"assword:", 5)
+        s.sendall(pw.encode() + b"\n")
+        # The shell prompt means we are in; "incorrect" means try the next.
+        reply = _read_until(s, b"# ", 5)
+        if b"# " in reply and b"incorrect" not in reply:
+            print(f"Logged in as {user} / {pw}")
+            return s
+        s.close()
     return None
 
 
@@ -201,13 +235,11 @@ def do_backup_via_telnet(host_ip, nfs_share, mount_point="/utils",
             print(f"Could not enable telnet on {host_ip}")
             return False
 
-    print(f"Connecting to {host_ip}:{telnet_port} as root/xmhdipc")
-    s = socket.create_connection((host_ip, telnet_port), timeout=10)
-    _read_until(s, b"login:", 5)
-    s.sendall(b"root\n")
-    _read_until(s, b"assword:", 5)
-    s.sendall(b"xmhdipc\n")
-    _read_until(s, b"# ", 5)
+    print(f"Connecting to {host_ip}:{telnet_port}")
+    s = telnet_login(host_ip, telnet_port)
+    if s is None:
+        print(f"No known root password works on {host_ip}:{telnet_port}")
+        return False
 
     s.sendall(f"mkdir -p {mount_point}\n".encode())
     _read_until(s, b"# ", 5)
