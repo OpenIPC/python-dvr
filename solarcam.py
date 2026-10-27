@@ -3,6 +3,7 @@ from dvrip import DVRIPCam, SomethingIsWrongWithCamera
 from pathlib import Path
 import subprocess
 import json
+import re
 from datetime import datetime
 
 
@@ -73,6 +74,8 @@ class SolarCam:
         fileExtention = Path(filename).suffix
         filenameSplit = filename.split("/")
         filenameDisk = f"{filenameSplit[3]}_{filenameSplit[5][:8]}".replace(".", "-")
+        # the segments come from the camera; keep anything else out of the path
+        filenameDisk = re.sub(r"[^A-Za-z0-9_-]", "_", filenameDisk)
         targetPathClean = f"{downloadDir}/{filenameDisk}"
 
         if extention != "":
@@ -81,16 +84,27 @@ class SolarCam:
         return f"{targetPathClean}{fileExtention}"
 
     def convertFile(self, sourceFile, targetFile):
+        # an argv list, not a shell string: the paths carry camera-supplied names
         if (
             subprocess.run(
-                f"ffmpeg -framerate 15 -i {sourceFile} -b:v 1M -c:v libvpx-vp9 -c:a libopus {targetFile}",
+                [
+                    "ffmpeg",
+                    "-framerate", "15",
+                    "-i", sourceFile,
+                    "-b:v", "1M",
+                    "-c:v", "libvpx-vp9",
+                    "-c:a", "libopus",
+                    targetFile,
+                ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                shell=True,
             ).returncode
             != 0
         ):
             self.logger.debug(f"Error converting video. Check {sourceFile}")
+            # a partial output would be taken as converted and stop the retry
+            Path(targetFile).unlink(missing_ok=True)
+            return
 
         self.logger.debug(f"File successfully converted: {targetFile}")
         Path(sourceFile).unlink()
@@ -110,10 +124,6 @@ class SolarCam:
                     file["FileName"], download_dir, extention=f"{target_filetype}"
                 )
 
-            if Path(f"{target_file_path}").is_file():
-                self.logger.debug(f"File already exists: {target_file_path}")
-                continue
-
             if (
                 target_file_path_convert
                 and Path(f"{target_file_path_convert}").is_file()
@@ -121,6 +131,12 @@ class SolarCam:
                 self.logger.debug(
                     f"Converted file already exists: {target_file_path_convert}"
                 )
+                continue
+
+            # with conversion on, a source left by a failed conversion is retried
+            downloaded = Path(f"{target_file_path}").is_file()
+            if downloaded and not target_file_path_convert:
+                self.logger.debug(f"File already exists: {target_file_path}")
                 continue
 
             if blacklist:
@@ -133,11 +149,12 @@ class SolarCam:
                     )
                     continue
 
-            self.logger.debug(f"Downloading {target_file_path}...")
-            self.cam.download_file(
-                file["BeginTime"], file["EndTime"], file["FileName"], target_file_path
-            )
-            self.logger.debug(f"Finished downloading {target_file_path}...")
+            if not downloaded:
+                self.logger.debug(f"Downloading {target_file_path}...")
+                self.cam.download_file(
+                    file["BeginTime"], file["EndTime"], file["FileName"], target_file_path
+                )
+                self.logger.debug(f"Finished downloading {target_file_path}...")
 
             if target_file_path_convert:
                 self.logger.debug(f"Converting {target_file_path_convert}...")
